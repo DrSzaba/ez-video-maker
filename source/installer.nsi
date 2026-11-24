@@ -5,7 +5,7 @@ Unicode true
 SetCompressor /SOLID lzma
 
 !define APPNAME "EZ Video Maker"
-!define VERSION "3.7.0"
+!define VERSION "3.8.0"
 !define REGKEY  "Software\EZVideoMaker"
 !define UNKEY   "Software\Microsoft\Windows\CurrentVersion\Uninstall\EZVideoMaker"
 
@@ -19,7 +19,7 @@ InstallDir "$LOCALAPPDATA\Programs\${APPNAME}"
 InstallDirRegKey HKCU "${REGKEY}" "InstallDir"
 RequestExecutionLevel user
 BrandingText "${APPNAME} ${VERSION} - Dr. Szaba"
-VIProductVersion "3.7.0.0"
+VIProductVersion "3.8.0.0"
 VIAddVersionKey "ProductName" "${APPNAME}"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"

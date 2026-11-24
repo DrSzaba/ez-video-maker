@@ -296,8 +296,10 @@ class EditorScreen(tk.Frame):
 
         mid = tk.Frame(self, bg=BG)
         mid.pack(fill="both", expand=True, padx=8, pady=(6, 0))
+        self._clip_in_monitor = False     # True while a storyboard clip is loaded
         self.monitor = PreviewMonitor(mid, on_prev=lambda: self._step(-1),
-                                      on_next=lambda: self._step(1))
+                                      on_next=lambda: self._step(1),
+                                      on_finished=self._monitor_finished)
         self.monitor.pack(side="left", fill="both", expand=True)
         self._dress_monitor()
         self._build_tools(mid)
@@ -334,9 +336,10 @@ class EditorScreen(tk.Frame):
             def playing():
                 return bool(m.playing and m.path and
                             not media.is_image(m.path))
-            self.eq = Equalizer(row, playing, bars=18, segs=8, width=150,
-                                height=28, bg=DARK2)
-            self.eq.pack(side="left", padx=(10, 2), before=m.time_lbl)
+            # a big, full-width RGB equalizer right above the play buttons
+            self.eq = Equalizer(row.master, playing, bars=48, segs=14,
+                                width=600, height=72, bg=DARK2)
+            self.eq.pack(fill="x", padx=8, pady=(6, 0), before=row)
             # keep the play / pause bar visible on short screens too
             bar = m.scrub.master
             bar.pack_forget()
@@ -827,7 +830,7 @@ class EditorScreen(tk.Frame):
         q.clips = [a, b]
         out = os.path.join(tempfile.gettempdir(), "ezvm_transition.mp4")
         self._run_export(out, proxy=True, project=q,
-                         after=lambda: self.monitor.load(
+                         after=lambda: self._show_other(
                              out, name=f"Transition: {c.transition}",
                              autoplay=True))
 
@@ -1138,15 +1141,31 @@ class EditorScreen(tk.Frame):
         self.effect_var.set(getattr(c, "effect", "None"))
         self._refresh_anim(c)
 
-    def _clip_selected(self, clip):
+    def _clip_selected(self, clip, autoplay=False):
         self._refresh_clip_panel()
         if clip.is_photo:
             self.monitor.load(clip.path, duration=clip.duration,
-                              name=clip.name)
+                              name=clip.name, autoplay=autoplay)
         else:
             self.monitor.load(clip.path, duration=clip.out_point - clip.in_point,
-                              offset=clip.in_point, name=clip.name)
+                              offset=clip.in_point, name=clip.name,
+                              autoplay=autoplay)
+        self._clip_in_monitor = True
         self.status_var.set(f"Selected clip: {clip.name}")
+
+    def _monitor_finished(self):
+        """A clip played to its end: go straight on to the next clip on the
+        storyboard, so 3 videos play one after another instead of stopping
+        after the first one.  (Whole-video previews just stop at the end.)"""
+        if not self._clip_in_monitor or not self.winfo_exists():
+            return
+        clips = self.project.clips
+        i, _ = self.project.find_clip(self.storyboard.selected_id)
+        if i is None or i + 1 >= len(clips):
+            return
+        nxt = clips[i + 1]
+        self.storyboard.select(nxt.id)
+        self._clip_selected(nxt, autoplay=True)
 
     def _clip_reordered(self, clip_id, new_index):
         if self.project.move_clip(clip_id, new_index):
@@ -1409,7 +1428,9 @@ class EditorScreen(tk.Frame):
             if c:
                 self._clip_selected(c)
             self.status_var.set("Fitted to the music. (Ctrl+Z to undo)")
-            messagebox.showinfo("Fit to music", msg, parent=self)
+            messagebox.showinfo("Fit to music", msg + "\n\nThe whole video "
+                                "now plays with the music.", parent=self)
+            self.play_whole()
         else:
             messagebox.showinfo("Fit to music", msg, parent=self)
 
@@ -1424,6 +1445,11 @@ class EditorScreen(tk.Frame):
                 self._clip_selected(c)
             self.status_var.set("Fitted the music to the video. "
                                 "(Ctrl+Z to undo)")
+            messagebox.showinfo("Fit music to video", msg + "\n\nThe whole "
+                                "video now plays with the music, all clips "
+                                "one after another.", parent=self)
+            self.play_whole()
+            return
         messagebox.showinfo("Fit music to video", msg, parent=self)
 
     def tool_rotate(self):
@@ -1539,7 +1565,7 @@ class EditorScreen(tk.Frame):
     def listen_audio(self):
         a = self._selected_audio()
         if a:
-            self.monitor.load(a.path, name=a.name, autoplay=True)
+            self._show_other(a.path, name=a.name, autoplay=True)
 
     def remove_audio(self):
         a = self._selected_audio()
@@ -1662,8 +1688,14 @@ class EditorScreen(tk.Frame):
                                 "Add videos or photos first.", parent=self)
             return
         out = os.path.join(tempfile.gettempdir(), "ezvm_preview.mp4")
-        self._run_export(out, proxy=True, after=lambda: self.monitor.load(
+        self._run_export(out, proxy=True, after=lambda: self._show_other(
             out, name="Whole video (quick preview)", autoplay=True))
+
+    def _show_other(self, path, **kw):
+        """Load something that is not a single storyboard clip (the whole
+        video, a transition test, a song) - it plays once and stops."""
+        self._clip_in_monitor = False
+        self.monitor.load(path, **kw)
 
     def export(self):
         if self._busy:

@@ -30,9 +30,10 @@ def fmt_time(t):
 
 class PreviewMonitor(tk.Frame):
     def __init__(self, parent, on_prev=None, on_next=None,
-                 on_position=None):
+                 on_position=None, on_finished=None):
         super().__init__(parent, bg=DARK, bd=1, relief="solid")
         self.on_prev, self.on_next = on_prev, on_next
+        self.on_finished = on_finished    # called when playback reaches the end
         self.on_position = on_position    # called with seconds while playing
         self.canvas = tk.Canvas(self, bg=DARK, highlightthickness=0,
                                 width=640, height=360)
@@ -442,6 +443,9 @@ class PreviewMonitor(tk.Frame):
         self._kill_procs()
         self.pos = min(self.pos, self.duration)
         self._update_time()
+        if self.on_finished:
+            # let the editor go on to the next clip
+            self.after(10, self.on_finished)
 
     # ---------- scrub / time ----------
     def _update_time(self):
